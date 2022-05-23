@@ -1,12 +1,11 @@
 use crate::interface::{self, AppStateManager, StateManager};
 use crate::proto::{self, state_manager_service_server::StateManagerService};
 use rand::{distributions::Alphanumeric, Rng};
-use std::sync::Mutex;
 use tonic::{Request, Response, Status};
 
 #[derive(Debug)]
 pub struct GrpcService<StateManager> {
-  manager: Mutex<StateManager>,
+  manager: StateManager,
   // Some string which is different across process restarts
   run_id: String,
 }
@@ -18,10 +17,7 @@ impl<TStateManager: StateManager> GrpcService<TStateManager> {
       .take(6)
       .map(char::from)
       .collect();
-    GrpcService {
-      manager: Mutex::new(manager),
-      run_id,
-    }
+    GrpcService { manager, run_id }
   }
 
   pub fn get_etag(&self, app: &TStateManager::AppStateManager) -> String {
@@ -45,10 +41,10 @@ impl<TStateManager: StateManager> GrpcService<TStateManager> {
     id: &str,
     f: impl FnOnce(&mut TStateManager::AppStateManager) -> Result<Out, Status>,
   ) -> Result<Response<Resp>, Status> {
-    let mut guard = self.manager.lock().unwrap();
-    let app = guard.get_app(id)?;
-    let result = f(app)?;
-    Ok(Response::new(Resp::with_etag(result, self.get_etag(app))))
+    self.manager.with_app(id, |app| {
+      let result = f(app)?;
+      Ok(Response::new(Resp::with_etag(result, self.get_etag(app))))
+    })?
   }
 }
 
@@ -59,11 +55,12 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
     request: Request<proto::InitAppRequest>,
   ) -> Result<Response<proto::InitAppResponse>, Status> {
     let request = request.into_inner();
-    let mut manager = self.manager.lock().unwrap();
-    let app = manager.init_app(&request.app_id)?;
-    Ok(Response::new(proto::InitAppResponse {
-      etag: self.get_etag(app),
-    }))
+    self.manager.init_app(&request.app_id)?;
+    self.manager.with_app(&request.app_id, |app| {
+      Ok(Response::new(proto::InitAppResponse {
+        etag: self.get_etag(app),
+      }))
+    }).unwrap()
   }
 
   async fn get(

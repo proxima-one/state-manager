@@ -3,8 +3,14 @@ use std::io::Result;
 pub trait StateManager: Sync + Send {
   type AppStateManager: AppStateManager;
 
-  fn init_app(&mut self, id: &str) -> Result<&mut Self::AppStateManager>;
-  fn get_app(&mut self, id: &str) -> Result<&mut Self::AppStateManager>;
+  fn init_app(&self, id: &str) -> Result<()>;
+
+  // We can't just return &mut AppStateManager because it would reference a local-scope RAII guard
+  fn with_app<Out>(
+    &self,
+    id: &str,
+    f: impl FnOnce(&mut Self::AppStateManager) -> Out,
+  ) -> Result<Out>;
 }
 
 pub trait AppStateManager: Sync + Send {

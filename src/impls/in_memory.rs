@@ -1,12 +1,13 @@
 use crate::interface::{AppStateManager, Bytes, Checkpoint, Part, StateManager};
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind, Result};
+use dashmap::DashMap;
 
 type KVMap = HashMap<String, Bytes>;
 
 #[derive(Default, Debug)]
 pub struct InMemoryStateManager {
-  apps: HashMap<String, InMemoryAppStateManager>,
+  apps: DashMap<String, InMemoryAppStateManager>,
 }
 
 #[derive(Default, Debug)]
@@ -32,21 +33,32 @@ impl InMemoryAppStateManager {
 impl StateManager for InMemoryStateManager {
   type AppStateManager = InMemoryAppStateManager;
 
-  fn init_app(&mut self, id: &str) -> Result<&mut Self::AppStateManager> {
+  fn init_app(&self, id: &str) -> Result<()> {
     let prev_value = self
       .apps
       .insert(id.to_owned(), InMemoryAppStateManager::new());
     if prev_value.is_some() {
-      return Err(Error::new(ErrorKind::AlreadyExists, format!("App already exists: {}", id)));
+      return Err(Error::new(
+        ErrorKind::AlreadyExists,
+        format!("App already exists: {}", id),
+      ));
     }
-    Ok(self.apps.get_mut(id).unwrap())
+    Ok(())
   }
 
-  fn get_app(&mut self, id: &str) -> Result<&mut Self::AppStateManager> {
-    self
-      .apps
-      .get_mut(id)
-      .ok_or(Error::new(ErrorKind::NotFound, format!("Unknown app: {}", id)))
+  fn with_app<Out>(
+    &self,
+    id: &str,
+    f: impl FnOnce(&mut Self::AppStateManager) -> Out,
+  ) -> Result<Out> {
+    if let Some(mut app) = self.apps.get_mut(id) {
+      Ok(f(&mut app))
+    } else {
+      Err(Error::new(
+        ErrorKind::NotFound,
+        format!("Unknown app: {}", id),
+      ))
+    }
   }
 }
 
@@ -133,10 +145,10 @@ impl AppStateManager for InMemoryAppStateManager {
       self.current.clear();
       self.checkpoints.truncate(index + 1);
     } else {
-      return Err(Error::new(ErrorKind::NotFound, format!(
-        "Checkpoint with id {} does not exist",
-        id
-      )));
+      return Err(Error::new(
+        ErrorKind::NotFound,
+        format!("Checkpoint with id {} does not exist", id),
+      ));
     }
     Ok(())
   }
@@ -153,10 +165,10 @@ impl AppStateManager for InMemoryAppStateManager {
       let removed = self.checkpoints.drain(..index);
       println!("Cleaned up {} checkpoints", removed.len());
     } else {
-      return Err(Error::new(ErrorKind::NotFound, format!(
-        "Checkpoint with id {} does not exist",
-        until_checkpoint
-      )));
+      return Err(Error::new(
+        ErrorKind::NotFound,
+        format!("Checkpoint with id {} does not exist", until_checkpoint),
+      ));
     }
     Ok(())
   }

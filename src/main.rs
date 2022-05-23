@@ -6,7 +6,9 @@ use tonic::transport::Server;
 mod grpc;
 mod impls;
 mod interface;
-mod proto;
+mod proto {
+  tonic::include_proto!("state_manager");
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,16 +1,15 @@
-use anyhow::Result;
+use std::io::Result;
 
-
-pub trait StateManager {
+pub trait StateManager: Sync + Send {
   type AppStateManager: AppStateManager;
 
-  fn init_app(&mut self, id: &str) -> Result<()>;
+  fn init_app(&mut self, id: &str) -> Result<&mut Self::AppStateManager>;
   fn get_app(&mut self, id: &str) -> Result<&mut Self::AppStateManager>;
 }
 
-pub trait AppStateManager {
+pub trait AppStateManager: Sync + Send {
   fn get<Key: AsRef<str>>(&self, keys: &[Key]) -> Result<Vec<Part>>;
-  fn set<TPart: AsRef<Part>>(&mut self, parts: &[TPart]) -> Result<()>;
+  fn set(&mut self, parts: Vec<Part>) -> Result<()>;
   fn get_checkpoints(&self) -> Result<Vec<Checkpoint>>;
   fn create_checkpoint(&mut self, payload: &str) -> Result<String>;
   fn revert(&mut self, id: &str) -> Result<()>;
@@ -21,6 +20,7 @@ pub trait AppStateManager {
 
 pub type Bytes = Vec<u8>;
 
+#[derive(Debug, Default)]
 pub struct Part {
   pub key: String,
   pub value: Bytes,

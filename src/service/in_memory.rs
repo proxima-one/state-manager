@@ -1,4 +1,4 @@
-use crate::interface::{AppStateManager, Bytes, Checkpoint, Part, StateManager};
+use super::interface::{AppStateManager, Bytes, Checkpoint, Part, StateManager};
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind, Result};
 use dashmap::DashMap;

@@ -1,4 +1,4 @@
-use crate::interface::{self, AppStateManager, StateManager};
+use crate::service::interface::{self, AppStateManager, StateManager};
 use crate::proto::{self, state_manager_service_server::StateManagerService};
 use rand::{distributions::Alphanumeric, Rng};
 use tonic::{Request, Response, Status};

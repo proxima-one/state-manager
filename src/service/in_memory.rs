@@ -1,7 +1,8 @@
-use super::interface::{AppStateManager, Bytes, Checkpoint, Part, StateManager};
+use super::interface::{AppStateManager, Checkpoint, StateManager};
+use crate::types::{Bytes, KeyValue};
+use dashmap::DashMap;
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind, Result};
-use dashmap::DashMap;
 
 type KVMap = HashMap<String, Bytes>;
 
@@ -25,8 +26,8 @@ struct AppCheckpoint {
 }
 
 impl InMemoryAppStateManager {
-  pub fn new() -> InMemoryAppStateManager {
-    InMemoryAppStateManager::default()
+  pub fn new() -> Self {
+    Self::default()
   }
 }
 
@@ -63,12 +64,12 @@ impl StateManager for InMemoryStateManager {
 }
 
 impl AppStateManager for InMemoryAppStateManager {
-  fn get<Key: AsRef<str>>(&self, keys: &[Key]) -> Result<Vec<Part>> {
+  fn get<Key: AsRef<str>>(&self, keys: &[Key]) -> Result<Vec<KeyValue>> {
     let mut result = Vec::new();
     for key in keys {
       let key = key.as_ref();
       if let Some(value) = self.current.get(key) {
-        result.push(Part {
+        result.push(KeyValue {
           key: key.to_owned(),
           value: value.clone(),
         });
@@ -76,7 +77,7 @@ impl AppStateManager for InMemoryAppStateManager {
       }
       if let Some(last_checkpoint) = self.checkpoints.last() {
         if let Some(value) = last_checkpoint.values.get(key) {
-          result.push(Part {
+          result.push(KeyValue {
             key: key.to_owned(),
             value: value.clone(),
           });
@@ -86,7 +87,7 @@ impl AppStateManager for InMemoryAppStateManager {
     Ok(result)
   }
 
-  fn set(&mut self, parts: Vec<Part>) -> Result<()> {
+  fn set(&mut self, parts: Vec<KeyValue>) -> Result<()> {
     self.modifications_number += 1;
     for part in parts {
       self.current.insert(part.key, part.value);

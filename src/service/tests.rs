@@ -1,8 +1,9 @@
 use super::in_memory::InMemoryStateManager;
-use super::interface::{AppStateManager, Checkpoint, Part, StateManager};
+use super::interface::{AppStateManager, Checkpoint, StateManager};
+use crate::types::KeyValue;
 
-fn part(key: impl AsRef<str>, value: impl AsRef<[u8]>) -> Part {
-  Part {
+fn part(key: impl AsRef<str>, value: impl AsRef<[u8]>) -> KeyValue {
+  KeyValue {
     key: key.as_ref().to_owned(),
     value: value.as_ref().to_owned(),
   }

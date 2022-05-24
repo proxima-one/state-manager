@@ -1,10 +1,11 @@
 use grpc::GrpcService;
-use service::in_memory::InMemoryStateManager;
 use proto::state_manager_service_server::StateManagerServiceServer;
+use service::in_memory::InMemoryStateManager;
 use tonic::transport::Server;
 
 mod grpc;
 mod service;
+mod types;
 mod proto {
   tonic::include_proto!("state_manager");
 }

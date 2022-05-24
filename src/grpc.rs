@@ -83,7 +83,7 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
       let parts = request
         .parts
         .into_iter()
-        .map(|part| interface::Part {
+        .map(|part| crate::types::KeyValue {
           key: part.key,
           value: part.value,
         })
@@ -136,17 +136,17 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
   }
 }
 
-impl From<interface::Part> for proto::Part {
-  fn from(part: interface::Part) -> proto::Part {
-    proto::Part {
+impl From<crate::types::KeyValue> for proto::Part {
+  fn from(part: crate::types::KeyValue) -> Self {
+    Self {
       key: part.key,
       value: part.value,
     }
   }
 }
 impl From<interface::Checkpoint> for proto::Checkpoint {
-  fn from(checkpoint: interface::Checkpoint) -> proto::Checkpoint {
-    proto::Checkpoint {
+  fn from(checkpoint: interface::Checkpoint) -> Self {
+    Self {
       id: checkpoint.id,
       payload: checkpoint.payload,
     }
@@ -161,8 +161,8 @@ impl WithEtag<()> for proto::InitAppResponse {
     Self { etag: etag.into() }
   }
 }
-impl WithEtag<Vec<interface::Part>> for proto::GetResponse {
-  fn with_etag(from: Vec<interface::Part>, etag: impl Into<String>) -> Self {
+impl WithEtag<Vec<crate::types::KeyValue>> for proto::GetResponse {
+  fn with_etag(from: Vec<crate::types::KeyValue>, etag: impl Into<String>) -> Self {
     Self {
       etag: etag.into(),
       parts: from.into_iter().map(From::from).collect(),

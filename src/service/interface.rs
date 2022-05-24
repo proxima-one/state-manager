@@ -26,12 +26,13 @@ pub trait AppStateManager: Sync + Send {
 
 pub type Bytes = Vec<u8>;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct Part {
   pub key: String,
   pub value: Bytes,
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct Checkpoint {
   pub id: String,
   pub payload: String,

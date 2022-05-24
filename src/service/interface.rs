@@ -1,4 +1,5 @@
 use std::io::Result;
+use crate::types::KeyValue;
 
 pub trait StateManager: Sync + Send {
   type AppStateManager: AppStateManager;
@@ -14,22 +15,14 @@ pub trait StateManager: Sync + Send {
 }
 
 pub trait AppStateManager: Sync + Send {
-  fn get<Key: AsRef<str>>(&self, keys: &[Key]) -> Result<Vec<Part>>;
-  fn set(&mut self, parts: Vec<Part>) -> Result<()>;
+  fn get<Key: AsRef<str>>(&self, keys: &[Key]) -> Result<Vec<KeyValue>>;
+  fn set(&mut self, parts: Vec<KeyValue>) -> Result<()>;
   fn get_checkpoints(&self) -> Result<Vec<Checkpoint>>;
   fn create_checkpoint(&mut self, payload: &str) -> Result<String>;
   fn revert(&mut self, id: &str) -> Result<()>;
   fn cleanup(&mut self, until_checkpoint: &str) -> Result<()>;
 
   fn modifications_number(&self) -> u32;
-}
-
-pub type Bytes = Vec<u8>;
-
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct Part {
-  pub key: String,
-  pub value: Bytes,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]

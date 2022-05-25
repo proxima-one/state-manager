@@ -13,9 +13,6 @@ pub enum Error {
   #[error("{0}")]
   NotFound(String),
 
-  #[error("{0}")]
-  AlreadyExists(String),
-
   #[error("DB error: {0}")]
   DbError(String),
 }

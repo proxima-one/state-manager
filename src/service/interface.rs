@@ -1,5 +1,4 @@
-use std::io::Result;
-use crate::types::KeyValue;
+use crate::types::{KeyValue, Result};
 
 pub trait StateManager: Sync + Send {
   type AppStateManager: AppStateManager;

@@ -209,7 +209,6 @@ impl From<Error> for Status {
   fn from(err: Error) -> Self {
     match err {
       Error::NotFound(message) => Self::not_found(message),
-      Error::AlreadyExists(message) => Self::already_exists(message),
       Error::DbError(message) => Self::internal(message),
     }
   }

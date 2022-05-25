@@ -24,7 +24,7 @@ pub trait AppStateManager: Sync + Send {
   fn modifications_number(&self) -> u32;
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Checkpoint {
   pub id: String,
   pub payload: String,

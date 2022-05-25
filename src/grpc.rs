@@ -210,6 +210,7 @@ impl From<Error> for Status {
     match err {
       Error::NotFound(message) => Self::not_found(message),
       Error::DbError(message) => Self::internal(message),
+      Error::IoError(err) => err.into(),
     }
   }
 }

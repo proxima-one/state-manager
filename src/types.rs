@@ -15,6 +15,9 @@ pub enum Error {
 
   #[error("DB error: {0}")]
   DbError(String),
+
+  #[error(transparent)]
+  IoError(#[from] std::io::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

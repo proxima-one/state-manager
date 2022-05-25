@@ -5,6 +5,7 @@ use tonic::transport::Server;
 
 mod grpc;
 mod service;
+mod storage;
 mod types;
 mod proto {
   tonic::include_proto!("state_manager");

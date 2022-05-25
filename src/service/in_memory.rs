@@ -1,8 +1,7 @@
 use super::interface::{AppStateManager, Checkpoint, StateManager};
-use crate::types::{Bytes, KeyValue};
+use crate::types::{Bytes, KeyValue, Error, Result};
 use dashmap::DashMap;
 use std::collections::HashMap;
-use std::io::{Error, ErrorKind, Result};
 
 type KVMap = HashMap<String, Bytes>;
 
@@ -39,8 +38,7 @@ impl StateManager for InMemoryStateManager {
       .apps
       .insert(id.to_owned(), InMemoryAppStateManager::new());
     if prev_value.is_some() {
-      return Err(Error::new(
-        ErrorKind::AlreadyExists,
+      return Err(Error::AlreadyExists(
         format!("App already exists: {}", id),
       ));
     }
@@ -55,8 +53,7 @@ impl StateManager for InMemoryStateManager {
     if let Some(mut app) = self.apps.get_mut(id) {
       Ok(f(&mut app))
     } else {
-      Err(Error::new(
-        ErrorKind::NotFound,
+      Err(Error::NotFound(
         format!("Unknown app: {}", id),
       ))
     }
@@ -146,8 +143,7 @@ impl AppStateManager for InMemoryAppStateManager {
       self.current.clear();
       self.checkpoints.truncate(index + 1);
     } else {
-      return Err(Error::new(
-        ErrorKind::NotFound,
+      return Err(Error::NotFound(
         format!("Checkpoint with id {} does not exist", id),
       ));
     }
@@ -166,8 +162,7 @@ impl AppStateManager for InMemoryAppStateManager {
       let removed = self.checkpoints.drain(..index);
       println!("Cleaned up {} checkpoints", removed.len());
     } else {
-      return Err(Error::new(
-        ErrorKind::NotFound,
+      return Err(Error::NotFound(
         format!("Checkpoint with id {} does not exist", until_checkpoint),
       ));
     }

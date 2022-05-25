@@ -1,5 +1,6 @@
-use crate::service::interface::{self, AppStateManager, StateManager};
 use crate::proto::{self, state_manager_service_server::StateManagerService};
+use crate::service::interface::{self, AppStateManager, StateManager};
+use crate::types::{Error, KeyValue};
 use rand::{distributions::Alphanumeric, Rng};
 use tonic::{Request, Response, Status};
 
@@ -56,11 +57,14 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
   ) -> Result<Response<proto::InitAppResponse>, Status> {
     let request = request.into_inner();
     self.manager.init_app(&request.app_id)?;
-    self.manager.with_app(&request.app_id, |app| {
-      Ok(Response::new(proto::InitAppResponse {
-        etag: self.get_etag(app),
-      }))
-    }).unwrap()
+    self
+      .manager
+      .with_app(&request.app_id, |app| {
+        Ok(Response::new(proto::InitAppResponse {
+          etag: self.get_etag(app),
+        }))
+      })
+      .unwrap()
   }
 
   async fn get(
@@ -83,7 +87,7 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
       let parts = request
         .parts
         .into_iter()
-        .map(|part| crate::types::KeyValue {
+        .map(|part| KeyValue {
           key: part.key,
           value: part.value,
         })
@@ -136,8 +140,8 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
   }
 }
 
-impl From<crate::types::KeyValue> for proto::Part {
-  fn from(part: crate::types::KeyValue) -> Self {
+impl From<KeyValue> for proto::Part {
+  fn from(part: KeyValue) -> Self {
     Self {
       key: part.key,
       value: part.value,
@@ -161,8 +165,8 @@ impl WithEtag<()> for proto::InitAppResponse {
     Self { etag: etag.into() }
   }
 }
-impl WithEtag<Vec<crate::types::KeyValue>> for proto::GetResponse {
-  fn with_etag(from: Vec<crate::types::KeyValue>, etag: impl Into<String>) -> Self {
+impl WithEtag<Vec<KeyValue>> for proto::GetResponse {
+  fn with_etag(from: Vec<KeyValue>, etag: impl Into<String>) -> Self {
     Self {
       etag: etag.into(),
       parts: from.into_iter().map(From::from).collect(),
@@ -198,5 +202,15 @@ impl WithEtag<()> for proto::RevertResponse {
 impl WithEtag<()> for proto::CleanupResponse {
   fn with_etag(_from: (), etag: impl Into<String>) -> Self {
     Self { etag: etag.into() }
+  }
+}
+
+impl From<Error> for Status {
+  fn from(err: Error) -> Self {
+    match err {
+      Error::NotFound(message) => Self::not_found(message),
+      Error::AlreadyExists(message) => Self::already_exists(message),
+      Error::DbError(message) => Self::internal(message),
+    }
   }
 }

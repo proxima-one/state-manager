@@ -3,7 +3,7 @@ use crate::types::{Bytes, Error, KeyValue, Result};
 use rocksdb::{checkpoint::Checkpoint, Error as RocksdbError, Options, WriteBatch, DB};
 use std::path::Path;
 
-struct RocksdbStorage {
+pub struct RocksdbStorage {
   db: DB,
 }
 

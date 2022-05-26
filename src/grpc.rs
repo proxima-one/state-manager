@@ -1,7 +1,9 @@
 use crate::proto::{self, state_manager_service_server::StateManagerService};
 use crate::service::interface::{self, AppStateManager, StateManager};
 use crate::types::{Error, KeyValue};
+use log::{info, error};
 use rand::{distributions::Alphanumeric, Rng};
+use std::fmt::Display;
 use tonic::{Request, Response, Status};
 
 #[derive(Debug)]
@@ -56,15 +58,22 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
     request: Request<proto::InitAppRequest>,
   ) -> Result<Response<proto::InitAppResponse>, Status> {
     let request = request.into_inner();
-    self.manager.init_app(&request.app_id)?;
-    self
+    let result = self
       .manager
-      .with_app(&request.app_id, |app| {
-        Ok(Response::new(proto::InitAppResponse {
-          etag: self.get_etag(app),
-        }))
-      })
-      .unwrap()
+      .init_app(&request.app_id)
+      .map_err(From::from)
+      .and_then(|()| {
+        self
+          .manager
+          .with_app(&request.app_id, |app| {
+            Ok(Response::new(proto::InitAppResponse {
+              etag: self.get_etag(app),
+            }))
+          })
+          .unwrap()
+      });
+    log(&request, &result);
+    result
   }
 
   async fn get(
@@ -72,9 +81,11 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
     request: Request<proto::GetRequest>,
   ) -> Result<Response<proto::GetResponse>, Status> {
     let request = request.into_inner();
-    self.with_app(&request.app_id, |app| {
+    let result = self.with_app(&request.app_id, |app| {
       app.get(&request.keys).map_err(From::from)
-    })
+    });
+    log(&request, &result);
+    result
   }
 
   async fn set(
@@ -82,18 +93,20 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
     request: Request<proto::SetRequest>,
   ) -> Result<Response<proto::SetResponse>, Status> {
     let request = request.into_inner();
-    self.with_app(&request.app_id, |app| {
+    let result = self.with_app(&request.app_id, |app| {
       self.check_etag(&request.etag, app)?;
       let parts = request
         .parts
-        .into_iter()
+        .iter()
         .map(|part| KeyValue {
-          key: part.key,
-          value: part.value,
+          key: part.key.clone(),
+          value: part.value.clone(),
         })
         .collect();
       app.set(parts).map_err(From::from)
-    })
+    });
+    log(&request, &result);
+    result
   }
 
   async fn checkpoints(
@@ -101,9 +114,11 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
     request: Request<proto::CheckpointsRequest>,
   ) -> Result<Response<proto::CheckpointsResponse>, Status> {
     let request = request.into_inner();
-    self.with_app(&request.app_id, |app| {
+    let result = self.with_app(&request.app_id, |app| {
       app.get_checkpoints().map_err(From::from)
-    })
+    });
+    log(&request, &result);
+    result
   }
 
   async fn create_checkpoint(
@@ -111,10 +126,12 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
     request: Request<proto::CreateCheckpointRequest>,
   ) -> Result<Response<proto::CreateCheckpointResponse>, Status> {
     let request = request.into_inner();
-    self.with_app(&request.app_id, |app| {
+    let result = self.with_app(&request.app_id, |app| {
       self.check_etag(&request.etag, app)?;
       app.create_checkpoint(&request.payload).map_err(From::from)
-    })
+    });
+    log(&request, &result);
+    result
   }
 
   async fn revert(
@@ -122,10 +139,12 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
     request: Request<proto::RevertRequest>,
   ) -> Result<Response<proto::RevertResponse>, Status> {
     let request = request.into_inner();
-    self.with_app(&request.app_id, |app| {
+    let result = self.with_app(&request.app_id, |app| {
       self.check_etag(&request.etag, app)?;
       app.revert(&request.checkpoint_id).map_err(From::from)
-    })
+    });
+    log(&request, &result);
+    result
   }
 
   async fn cleanup(
@@ -133,10 +152,23 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
     request: Request<proto::CleanupRequest>,
   ) -> Result<Response<proto::CleanupResponse>, Status> {
     let request = request.into_inner();
-    self.with_app(&request.app_id, |app| {
+    let result = self.with_app(&request.app_id, |app| {
       self.check_etag(&request.etag, app)?;
       app.cleanup(&request.until_checkpoint).map_err(From::from)
-    })
+    });
+    log(&request, &result);
+    result
+  }
+}
+
+fn log<T>(request: &impl Display, result: &Result<Response<T>, Status>) {
+  match result {
+    Ok(_response) => {
+      info!("{} => OK", request);
+    }
+    Err(status) => {
+      error!("{} => {}: {:?}", request, status.code(), status.message());
+    }
   }
 }
 
@@ -212,5 +244,56 @@ impl From<Error> for Status {
       Error::DbError(message) => Self::internal(message),
       Error::IoError(err) => err.into(),
     }
+  }
+}
+
+impl Display for proto::InitAppRequest {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "[{}]: InitApp()", self.app_id)
+  }
+}
+
+impl Display for proto::GetRequest {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "[{}]: Get({:?})", self.app_id, self.keys)
+  }
+}
+
+impl Display for proto::SetRequest {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "[{}]: Set({:?}))",
+      self.app_id,
+      self.parts.iter().map(|part| &part.key).collect::<Vec<_>>()
+    )
+  }
+}
+
+impl Display for proto::CheckpointsRequest {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "[{}]: Checkpoints()", self.app_id)
+  }
+}
+
+impl Display for proto::CreateCheckpointRequest {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "[{}]: CreateCheckpoint(payload: {:?})",
+      self.app_id, self.payload
+    )
+  }
+}
+
+impl Display for proto::RevertRequest {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "[{}]: Revert({:?})", self.app_id, self.checkpoint_id)
+  }
+}
+
+impl Display for proto::CleanupRequest {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "[{}]: Cleanup({:?})", self.app_id, self.until_checkpoint)
   }
 }

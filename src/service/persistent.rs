@@ -2,6 +2,7 @@ use super::interface::{AppStateManager, Checkpoint, StateManager};
 use crate::storage::interface::KVStorage;
 use crate::types::{Error, KeyValue, Result};
 use dashmap::DashMap;
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -127,7 +128,7 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
 
   fn remove_checkpoints(&mut self, slice: impl std::ops::RangeBounds<usize>) -> Result<()> {
     let to_remove: Vec<_> = self.manifest.checkpoints.drain(slice).collect();
-    println!("Cleaning up {} checkpoints", to_remove.len());
+    info!("Cleaning up {} checkpoints", to_remove.len());
     self.save_manifest()?;
     to_remove.into_iter().try_for_each(|checkpoint| {
       std::fs::remove_dir_all(Self::checkpoint_path(&self.root, checkpoint.id))

@@ -1,6 +1,7 @@
 use super::interface::{AppStateManager, Checkpoint, StateManager};
 use crate::types::{Bytes, Error, KeyValue, Result};
 use dashmap::DashMap;
+use log::info;
 use std::collections::HashMap;
 
 type KVMap = HashMap<String, Bytes>;
@@ -129,7 +130,7 @@ impl AppStateManager for InMemoryAppStateManager {
       .map(|(i, _checkpoint)| i);
     if let Some(index) = index {
       self.modifications_number += 1;
-      println!(
+      info!(
         "Dropping {} latest checkpoints to end up at {}",
         self.checkpoints.len() - index - 1,
         id
@@ -155,7 +156,7 @@ impl AppStateManager for InMemoryAppStateManager {
     if let Some(index) = index {
       self.modifications_number += 1;
       let removed = self.checkpoints.drain(..index);
-      println!("Cleaned up {} checkpoints", removed.len());
+      info!("Cleaned up {} checkpoints", removed.len());
     } else {
       return Err(Error::NotFound(format!(
         "Checkpoint with id {} does not exist",

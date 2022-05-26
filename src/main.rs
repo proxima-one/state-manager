@@ -1,5 +1,6 @@
 use clap::Parser;
 use grpc::GrpcService;
+use log::info;
 use proto::state_manager_service_server::StateManagerServiceServer;
 use service::persistent::PersistentStateManager;
 use storage::rocksdb::RocksdbStorage;
@@ -23,19 +24,36 @@ struct Args {
   db_path: String,
 }
 
+fn setup_logger() -> Result<(), fern::InitError> {
+  fern::Dispatch::new()
+    .format(|out, message, record| {
+      out.finish(format_args!(
+        "[{}] {:5} {}",
+        chrono::Local::now().format("%FT%T"),
+        record.level(),
+        message
+      ))
+    })
+    .level(log::LevelFilter::Info)
+    .chain(std::io::stderr())
+    .apply()?;
+  Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+  setup_logger()?;
+
   let args = Args::parse();
 
   let addr = format!("[::1]:{}", args.port).parse()?;
   let service = GrpcService::new(PersistentStateManager::<RocksdbStorage>::new(args.db_path));
 
-  println!("Listening on {}", addr);
-
-  Server::builder()
+  let on_finish = Server::builder()
     .add_service(StateManagerServiceServer::new(service))
-    .serve(addr)
-    .await?;
+    .serve(addr);
+  info!("Listening on {}", addr);
 
+  on_finish.await?;
   Ok(())
 }

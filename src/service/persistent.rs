@@ -25,6 +25,13 @@ pub struct PersistentAppStateManager<Storage: KVStorage> {
 }
 
 impl<Storage: KVStorage> PersistentStateManager<Storage> {
+  pub fn new(root: impl Into<PathBuf>) -> Self {
+    Self {
+      root: root.into(),
+      apps: Default::default(),
+    }
+  }
+
   fn app_path(&self, app_id: impl AsRef<Path>) -> PathBuf {
     self.root.join(app_id)
   }
@@ -43,12 +50,17 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     Self::checkpoints_dir(root).join(checkpoint)
   }
 
+  fn manifest_path(root: impl AsRef<Path>) -> PathBuf {
+    root.as_ref().join("manifest.json")
+  }
+
   fn new(root: PathBuf) -> Result<Self> {
     std::fs::create_dir_all(Self::checkpoints_dir(&root))?;
+    let manifest = Self::load_manifest(Self::manifest_path(&root))?;
     let storage = Storage::new(Self::head_path(&root))?;
     Ok(Self {
       root,
-      manifest: AppManifest::default(), // TODO
+      manifest,
       storage,
       modifications_number: 0,
     })
@@ -58,17 +70,29 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     if !root.is_dir() {
       return Err(Error::NotFound("Application does not exist".to_owned()));
     }
+    let manifest = Self::load_manifest(Self::manifest_path(&root))?;
     let storage = Storage::new(Self::head_path(&root))?;
     Ok(Self {
       root,
-      manifest: AppManifest::default(), // TODO
+      manifest,
       storage,
       modifications_number: 0,
     })
   }
 
+  fn load_manifest(path: impl AsRef<Path>) -> Result<AppManifest> {
+    if let Ok(contents) = std::fs::read_to_string(path) {
+      serde_json::from_str(&contents).map_err(|err| std::io::Error::from(err).into())
+    } else {
+      Ok(AppManifest::default())
+    }
+  }
+
   fn save_manifest(&self) -> Result<()> {
-    unimplemented!();
+    let contents = serde_json::to_string(&self.manifest).map_err(std::io::Error::from)?;
+    let path = Self::manifest_path(&self.root);
+    std::fs::write(path, contents)?;
+    Ok(())
   }
 
   fn generate_checkpoint_id(&self) -> String {
@@ -106,7 +130,7 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     println!("Cleaning up {} checkpoints", to_remove.len());
     self.save_manifest()?;
     to_remove.into_iter().try_for_each(|checkpoint| {
-      std::fs::remove_dir(Self::checkpoint_path(&self.root, checkpoint.id))
+      std::fs::remove_dir_all(Self::checkpoint_path(&self.root, checkpoint.id))
     })?;
     Ok(())
   }

@@ -1,6 +1,6 @@
 use super::interface::KVStorage;
 use crate::types::{Bytes, Error, KeyValue, Result};
-use rocksdb::{checkpoint::Checkpoint, Error as RocksdbError, WriteBatch, DB};
+use rocksdb::{checkpoint::Checkpoint, Error as RocksdbError, Options, WriteBatch, DB};
 use std::path::Path;
 
 struct RocksdbStorage {
@@ -17,6 +17,11 @@ impl KVStorage for RocksdbStorage {
   fn new(path: impl AsRef<Path>) -> Result<Self> {
     let db = DB::open_default(path)?;
     Ok(Self { db })
+  }
+
+  fn destroy(path: impl AsRef<Path>) -> Result<()> {
+    DB::destroy(&Options::default(), path)?;
+    Ok(())
   }
 
   fn get_one<Key: AsRef<str>>(&self, key: Key) -> Result<Bytes> {

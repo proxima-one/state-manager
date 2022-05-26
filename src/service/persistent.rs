@@ -101,13 +101,26 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     }
   }
 
-  fn remove_checkpoints(
-    &self,
-    checkpoints: impl IntoIterator<Item = Checkpoint>,
-  ) -> std::io::Result<()> {
-    checkpoints.into_iter().try_for_each(|checkpoint| {
+  fn remove_checkpoints(&mut self, slice: impl std::ops::RangeBounds<usize>) -> Result<()> {
+    let to_remove: Vec<_> = self.manifest.checkpoints.drain(slice).collect();
+    println!("Cleaning up {} checkpoints", to_remove.len());
+    self.save_manifest()?;
+    to_remove.into_iter().try_for_each(|checkpoint| {
       std::fs::remove_dir(Self::checkpoint_path(&self.root, checkpoint.id))
-    })
+    })?;
+    Ok(())
+  }
+
+  fn reset_head(&mut self, checkpoint_id: impl AsRef<Path>) -> Result<()> {
+    let head_path = Self::head_path(&self.root);
+    let checkpoint_path = Self::checkpoint_path(&self.root, checkpoint_id);
+
+    let checkpoint_db = Storage::new(checkpoint_path)?;
+    self.storage = checkpoint_db; // closes connection to current db
+    Storage::destroy(&head_path)?;
+    self.storage.save_copy(&head_path)?;
+    self.storage = Storage::new(head_path)?;
+    Ok(())
   }
 }
 
@@ -166,18 +179,18 @@ impl<Storage: KVStorage> AppStateManager for PersistentAppStateManager<Storage> 
     Ok(new_id)
   }
 
-  fn revert(&mut self, _id: &str) -> Result<()> {
+  fn revert(&mut self, id: &str) -> Result<()> {
+    let index = self.find_checkpoint(id)?;
     self.modifications_number += 1;
-    unimplemented!();
+    self.reset_head(id)?;
+    self.remove_checkpoints((index + 1)..)?;
+    Ok(())
   }
 
   fn cleanup(&mut self, until_checkpoint: &str) -> Result<()> {
     let index = self.find_checkpoint(until_checkpoint)?;
     self.modifications_number += 1;
-    let to_remove: Vec<_> = self.manifest.checkpoints.drain(..index).collect();
-    println!("Cleaning up {} checkpoints", to_remove.len());
-    self.save_manifest()?;
-    self.remove_checkpoints(to_remove)?;
+    self.remove_checkpoints(..index)?;
     Ok(())
   }
 

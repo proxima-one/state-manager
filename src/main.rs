@@ -17,14 +17,17 @@ mod proto {
 #[derive(Parser, Debug)]
 #[clap(version)]
 struct Args {
-  #[clap(short, long)]
+  #[clap(long, env)]
   port: u16,
 
-  #[clap(short, long, default_value = "/run/state-manager")]
+  #[clap(long, env, default_value = "/run/state-manager")]
   db_path: String,
+
+  #[clap(env, default_value_t = log::LevelFilter::Info)]
+  log_level: log::LevelFilter,
 }
 
-fn setup_logger() -> Result<(), fern::InitError> {
+fn setup_logger(args: &Args) -> Result<(), fern::InitError> {
   fern::Dispatch::new()
     .format(|out, message, record| {
       out.finish(format_args!(
@@ -33,7 +36,7 @@ fn setup_logger() -> Result<(), fern::InitError> {
         message
       ))
     })
-    .level(log::LevelFilter::Info)
+    .level(args.log_level)
     .chain(std::io::stderr())
     .apply()?;
   Ok(())
@@ -41,9 +44,8 @@ fn setup_logger() -> Result<(), fern::InitError> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-  setup_logger()?;
-
   let args = Args::parse();
+  setup_logger(&args)?;
 
   let addr = format!("[::1]:{}", args.port).parse()?;
   let service = GrpcService::new(PersistentStateManager::<RocksdbStorage>::new(args.db_path));

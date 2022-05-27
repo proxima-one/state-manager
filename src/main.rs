@@ -28,8 +28,7 @@ fn setup_logger() -> Result<(), fern::InitError> {
   fern::Dispatch::new()
     .format(|out, message, record| {
       out.finish(format_args!(
-        "[{}] {:5} {}",
-        chrono::Local::now().format("%FT%T"),
+        "{:5} {}",
         record.level(),
         message
       ))

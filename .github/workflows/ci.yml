@@ -19,7 +19,6 @@ jobs:
       DOCKER_REGISTRY_URL: ${{ secrets.DOCKER_REGISTRY_URL }}
 
   publish:
-    if: ${{ github.event_name == 'push' }}
     uses: proxima-one/github-workflows/.github/workflows/docker-publish.yml@master
     needs: version
     with:

@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let args = Args::parse();
   setup_logger(&args)?;
 
-  let addr = format!("[::1]:{}", args.port).parse()?;
+  let addr = format!("0.0.0.0:{}", args.port).parse()?;
   let service = GrpcService::new(PersistentStateManager::<RocksdbStorage>::new(args.db_path));
 
   let on_finish = Server::builder()

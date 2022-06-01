@@ -24,7 +24,7 @@ const k8sProvider = new k8s.Provider("infra-k8s", {
 });
 
 const servicesStack = new pulumi.StackReference(`proxima-one/${cfg.require<string>("services-stack-name")}-services/default`, {});
-const webAppsOptions = servicesStack.requireOutput("webServices") as pulumi.Output<{namespace: string, imagePullSecret: string}>;
+const webAppsOptions = servicesStack.requireOutput("webServices") as pulumi.Output<{ namespace: string, imagePullSecret: string }>;
 
 const serverGrpcPort = cfg.require<string>("server-grpc-port");
 const dbPath = cfg.require<string>("db-path");
@@ -32,6 +32,24 @@ const serviceName = "state-manager";
 const server_labels: Record<string, string> = {
   app: serviceName,
 };
+
+const volumeName = "state-manager-db";
+
+const pvc = new k8s.core.v1.PersistentVolumeClaim(volumeName, {
+  metadata: {
+    namespace: webAppsOptions.namespace,
+  },
+  spec: {
+    storageClassName: "standard",
+    accessModes: ["ReadWriteOnce"],
+    resources: {
+      requests: {
+        storage: "128G"
+      }
+    }
+  }
+});
+
 const server = new k8s.apps.v1.Deployment(serviceName, {
   metadata: {
     namespace: webAppsOptions.namespace,
@@ -70,6 +88,12 @@ const server = new k8s.apps.v1.Deployment(serviceName, {
               containerPort: parseInt(serverGrpcPort),
             }
           ],
+          volumeMounts: [
+            {
+              name: volumeName,
+              mountPath: dbPath
+            }
+          ],
           resources: {
             requests: {
               memory: "1000Mi",
@@ -81,11 +105,17 @@ const server = new k8s.apps.v1.Deployment(serviceName, {
             }
           }
         }],
+        volumes: [{
+          name: volumeName,
+          persistentVolumeClaim: {
+            claimName: pvc.metadata.name,
+            readOnly: false,
+          }
+        }],
       }
     },
   }
-}, {provider: k8sProvider});
-
+}, { provider: k8sProvider });
 
 const service = new k8s.core.v1.Service(serviceName, {
   metadata: {
@@ -102,4 +132,4 @@ const service = new k8s.core.v1.Service(serviceName, {
       }
     ],
   }
-}, {dependsOn: server, provider: k8sProvider});
+}, { dependsOn: server, provider: k8sProvider });

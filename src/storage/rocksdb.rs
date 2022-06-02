@@ -15,7 +15,10 @@ impl From<RocksdbError> for Error {
 
 impl KVStorage for RocksdbStorage {
   fn new(path: impl AsRef<Path>) -> Result<Self> {
-    let db = DB::open_default(path)?;
+    let mut options = Options::default();
+    options.set_paranoid_checks(true);
+    options.create_if_missing(true);
+    let db = DB::open(&options, path)?;
     Ok(Self { db })
   }
 

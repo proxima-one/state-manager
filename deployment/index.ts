@@ -59,6 +59,9 @@ const server = new k8s.apps.v1.Deployment(serviceName, {
     selector: {
       matchLabels: server_labels
     },
+    strategy: {
+      type: "Recreate"
+    },
     template: {
       metadata: {
         labels: server_labels,

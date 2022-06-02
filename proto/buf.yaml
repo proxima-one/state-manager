@@ -1,4 +1,5 @@
 version: v1
+name: buf.build/proximaone/state-manager
 lint:
   use:
     - DEFAULT

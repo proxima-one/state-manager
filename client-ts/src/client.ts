@@ -1,122 +1,87 @@
-import { StateManagerServiceClient } from "./gen/proto/state_manager/state_manager_grpc_pb";
-import * as pb from "./gen/proto/state_manager/state_manager_pb"
+import { StateManagerServiceClientImpl, Checkpoint } from "./gen/proto/state_manager/state_manager";
+import { Client as GrpcClient, requestCallback } from "@grpc/grpc-js";
 
 export type CheckpointId = string;
 
 export class Client {
   etag!: string;
 
+  private rpc: StateManagerServiceClientImpl;
+
   constructor(
-    readonly grpc: StateManagerServiceClient,
+    readonly grpc: GrpcClient,
     readonly appId: string,
-  ) { }
+  ) {
+    const sendRequest = (service: string, method: string, data: Uint8Array): Promise<Uint8Array> => {
+      const path = `/${service}/${method}`
+      return new Promise((resolve, reject) => {
+        const requestCallback: requestCallback<any> = (err, res) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(res);
+          }
+        };
+
+        function passThrough(argument: any) {
+          return argument;
+        }
+
+        // Using passThrough as the serialize and deserialize functions
+        grpc.makeUnaryRequest(path, passThrough, passThrough, data, requestCallback);
+      });
+    };
+
+    this.rpc = new StateManagerServiceClientImpl({ request: sendRequest });
+  }
 
 
   async initApp(): Promise<void> {
-    const request = new pb.InitAppRequest().setAppId(this.appId);
-    return new Promise((resolve, reject) =>
-      this.grpc.initApp(request, (error, response) => {
-        if (error) {
-          reject(error);
-        } else {
-          this.etag = response.getEtag()
-          resolve();
-        }
-      })
-    );
+    const response = await this.rpc.InitApp({ appId: this.appId });
+    this.etag = response.etag;
   }
 
-  async get(keys: string[]): Promise<Record<string, string | Uint8Array>> {
-    const request = new pb.GetRequest().setAppId(this.appId).setKeysList(keys);
-    return new Promise((resolve, reject) =>
-      this.grpc.get(request, (error, response) => {
-        if (error) {
-          reject(error);
-        } else {
-          this.etag = response.getEtag()
-          resolve(Object.fromEntries(response.getPartsList().map(part => [part.getKey(), part.getValue()])));
-        }
-      })
-    );
+  async get(keys: string[]): Promise<Record<string, Uint8Array>> {
+    const response = await this.rpc.Get({ appId: this.appId, keys });
+    this.etag = response.etag;
+    return Object.fromEntries(response.parts.map(part => [part.key, Uint8Array.from(part.value)]));
   }
 
   async set(parts: Record<string, Uint8Array>): Promise<void> {
-    let pbParts = Object.entries(parts).map(([key, value]) => (new pb.Part().setKey(key).setValue(value)));
-    const request = new pb.SetRequest()
-      .setAppId(this.appId).setEtag(this.etag)
-      .setPartsList(pbParts);
-    return new Promise((resolve, reject) =>
-      this.grpc.set(request, (error, response) => {
-        if (error) {
-          reject(error);
-        } else {
-          this.etag = response.getEtag()
-          resolve();
-        }
-      })
-    );
+    const pbParts = Object.entries(parts).map(([key, value]) => ({ key, value }));
+    const response = await this.rpc.Set({
+      appId: this.appId,
+      etag: this.etag,
+      parts: pbParts,
+    });
+    this.etag = response.etag;
   }
 
-  async checkpoints(): Promise<pb.Checkpoint.AsObject[]> {
-    const request = new pb.CheckpointsRequest().setAppId(this.appId);
-    return new Promise((resolve, reject) =>
-      this.grpc.checkpoints(request, (error, response) => {
-        if (error) {
-          reject(error);
-        } else {
-          this.etag = response.getEtag()
-          resolve(response.toObject().checkpointsList);
-        }
-      })
-    );
+  async checkpoints(): Promise<Checkpoint[]> {
+    const response = await this.rpc.Checkpoints({ appId: this.appId });
+    this.etag = response.etag;
+    return response.checkpoints;
   }
 
   async create_checkpoint(payload: string): Promise<CheckpointId> {
-    const request = new pb.CreateCheckpointRequest()
-      .setAppId(this.appId).setEtag(this.etag)
-      .setPayload(payload);
-    return new Promise((resolve, reject) =>
-      this.grpc.createCheckpoint(request, (error, response) => {
-        if (error) {
-          reject(error);
-        } else {
-          this.etag = response.getEtag()
-          resolve(response.getId());
-        }
-      })
-    );
+    const response = await this.rpc.CreateCheckpoint({
+      appId: this.appId, etag: this.etag, payload
+    });
+    this.etag = response.etag;
+    return response.id;
   }
 
   async revert(id: CheckpointId): Promise<void> {
-    const request = new pb.RevertRequest()
-      .setAppId(this.appId).setEtag(this.etag)
-      .setCheckpointId(id);
-    return new Promise((resolve, reject) =>
-      this.grpc.revert(request, (error, response) => {
-        if (error) {
-          reject(error);
-        } else {
-          this.etag = response.getEtag()
-          resolve();
-        }
-      })
-    );
+    const response = await this.rpc.Revert({
+      appId: this.appId, etag: this.etag, checkpointId: id
+    });
+    this.etag = response.etag;
   }
 
-    async cleanup(untilCheckpoint: CheckpointId): Promise<void> {
-    const request = new pb.CleanupRequest()
-      .setAppId(this.appId)
-      .setEtag(this.etag)
-      .setUntilCheckpoint(untilCheckpoint);
-    return new Promise((resolve, reject) =>
-      this.grpc.cleanup(request, (error, response) => {
-        if (error) {
-          reject(error);
-        } else {
-          this.etag = response.getEtag()
-          resolve();
-        }
-      })
-    );
+  async cleanup(untilCheckpoint: CheckpointId): Promise<void> {
+    const response = await this.rpc.Cleanup({
+      appId: this.appId, etag: this.etag, untilCheckpoint
+    });
+    this.etag = response.etag;
   }
 }

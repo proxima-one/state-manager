@@ -1,5 +1,5 @@
 import { StateManagerServiceClientImpl, Checkpoint } from "./gen/proto/state_manager/state_manager";
-import { Client as GrpcClient, requestCallback } from "@grpc/grpc-js";
+import { Client as GrpcClient, requestCallback, credentials } from "@grpc/grpc-js";
 
 export type CheckpointId = string;
 
@@ -84,4 +84,9 @@ export class Client {
     });
     this.etag = response.etag;
   }
+}
+
+export function createNoAuthClient(address: string, appId: string) {
+  const grpc = new GrpcClient(address, credentials.createInsecure());
+  return new Client(grpc, appId);
 }

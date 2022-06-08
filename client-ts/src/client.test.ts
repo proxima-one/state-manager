@@ -1,5 +1,4 @@
-import { Client } from "./client";
-import { credentials, Client as GrpcClient } from "@grpc/grpc-js";
+import { createNoAuthClient } from "./client";
 
 function to_bytes(text: string): Uint8Array {
   return Uint8Array.from(Array.from(text).map(letter => letter.charCodeAt(0)));
@@ -8,8 +7,7 @@ function to_bytes(text: string): Uint8Array {
 test("Service", async () => {
   const PORT = 50051;
 
-  const grpcClient = new GrpcClient(`localhost:${PORT}`, credentials.createInsecure());
-  const client = new Client(grpcClient, "test-app");
+  const client = createNoAuthClient(`localhost:${PORT}`, "test-app");
 
   try {
     await client.initApp();

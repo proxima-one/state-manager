@@ -1,12 +1,14 @@
 {
-  "name": "state-manager-client",
-  "version": "1.0.0",
-  "main": "dist/index.ts",
+  "name": "@proxima-one/state-manager-client",
+  "version": "0.1.1",
+  "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
+  "author": "proxima.one",
   "license": "MIT",
+  "repository": "https://github.com/proxima-one/state-manager",
   "dependencies": {
     "@grpc/grpc-js": "^1.6.7",
     "@types/google-protobuf": "^3.15.6",
@@ -14,17 +16,15 @@
   },
   "devDependencies": {
     "@types/jest": "^27.5.1",
-    "copyfiles": "^2.4.1",
     "ts-jest": "^28.0.2",
     "typescript": "^4.6.4"
   },
   "scripts": {
     "clean": "rm -rf src/gen dist",
-    "run": "ts-node src/index.ts",
     "codegen": "buf generate ../proto",
     "compile": "tsc --build",
-    "copy-gen-files": "copyfiles -u 1 src/**/*.d.ts src/**/*.proto src/**/*.js dist/",
-    "build": "yarn codegen && yarn compile && yarn copy-gen-files",
-    "test": "yarn build && jest --testRegex '(/__tests__/.*|(\\.|/)(test|spec|e2e))\\.jsx?$'"
+    "build": "yarn clean && yarn codegen && yarn compile",
+    "prepack": "yarn build",
+    "test": "yarn build && jest"
   }
 }

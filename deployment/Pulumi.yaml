@@ -1,3 +1,0 @@
-name: state-manager
-runtime: nodejs
-description: State manager gRPC service

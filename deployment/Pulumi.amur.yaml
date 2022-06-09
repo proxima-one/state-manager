@@ -1,4 +1,0 @@
-config:
-  state-manager:services-stack-name: "amur"
-  state-manager:server-grpc-port: 9090
-  state-manager:db-path: /run/db

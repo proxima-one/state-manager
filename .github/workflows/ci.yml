@@ -1,4 +1,4 @@
-name: amur-dev-deploy
+name: docker-publish
 on:
   push:
     branches:
@@ -51,19 +51,3 @@ jobs:
           # https://github.com/docker/build-push-action/blob/master/docs/advanced/cache.md#cache-backend-api
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  pulumi:
-    if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.base_ref == 'master') }}
-    needs: [version, publish]
-    uses: proxima-one/github-workflows/.github/workflows/pulumi-service.yml@master
-    with:
-      stack: "proxima-one/amur-dev"
-      pulumiPath: ./deployment
-      preview: ${{ github.event_name == 'pull_request' }}
-      publishedImageId: ${{ needs.version.outputs.imageId }}
-      publishedVersion: ${{ needs.version.outputs.version }}
-    secrets:
-      DOCKER_REGISTRY_URL: ${{ secrets.DOCKER_REGISTRY_URL }}
-      CI_NPM_TOKEN: ${{ secrets.CI_NPM_TOKEN }}
-      GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}

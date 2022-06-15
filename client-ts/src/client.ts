@@ -1,10 +1,12 @@
+import { strict as assert } from "assert";
 import { StateManagerServiceClientImpl, Checkpoint } from "./gen/proto/state_manager/state_manager";
 import { Client as GrpcClient, requestCallback, credentials } from "@grpc/grpc-js";
+import { sleep } from "@proxima-one/proxima-utils";
 
 export type CheckpointId = string;
 
 export class Client {
-  etag!: string;
+  private etag: string | undefined;
 
   private rpc: StateManagerServiceClientImpl;
 
@@ -12,8 +14,7 @@ export class Client {
     readonly grpc: GrpcClient,
     readonly appId: string,
   ) {
-    const sendRequest = (service: string, method: string, data: Uint8Array): Promise<Uint8Array> => {
-      const path = `/${service}/${method}`
+    const sendRequest = (path: string, data: Uint8Array): Promise<Uint8Array> => {
       return new Promise((resolve, reject) => {
         const requestCallback: requestCallback<any> = (err, res) => {
           if (err) {
@@ -32,7 +33,23 @@ export class Client {
       });
     };
 
-    this.rpc = new StateManagerServiceClientImpl({ request: sendRequest });
+    const sendRequestWithReties = async (service: string, method: string, data: Uint8Array): Promise<Uint8Array> => {
+      const RETRIES = 5;
+      const DELAY = 200;
+
+      const path = `/${service}/${method}`
+      for (let i = 0; i < RETRIES; ++i) {
+        try {
+          return await sendRequest(path, data);
+        } catch (e) {
+          console.error(`Error during gRPC call, retrying. ${e}`);
+        }
+        await sleep(DELAY);
+      }
+      return sendRequest(path, data);
+    }
+
+    this.rpc = new StateManagerServiceClientImpl({ request: sendRequestWithReties });
   }
 
 
@@ -48,6 +65,7 @@ export class Client {
   }
 
   async set(parts: Record<string, Uint8Array>): Promise<void> {
+    assert(this.etag);
     const pbParts = Object.entries(parts).map(([key, value]) => ({ key, value }));
     const response = await this.rpc.Set({
       appId: this.appId,
@@ -64,6 +82,7 @@ export class Client {
   }
 
   async create_checkpoint(payload: string): Promise<CheckpointId> {
+    assert(this.etag);
     const response = await this.rpc.CreateCheckpoint({
       appId: this.appId, etag: this.etag, payload
     });
@@ -72,6 +91,7 @@ export class Client {
   }
 
   async revert(id: CheckpointId): Promise<void> {
+    assert(this.etag);
     const response = await this.rpc.Revert({
       appId: this.appId, etag: this.etag, checkpointId: id
     });
@@ -79,6 +99,7 @@ export class Client {
   }
 
   async cleanup(untilCheckpoint: CheckpointId): Promise<void> {
+    assert(this.etag);
     const response = await this.rpc.Cleanup({
       appId: this.appId, etag: this.etag, untilCheckpoint
     });
@@ -87,6 +108,6 @@ export class Client {
 }
 
 export function createNoAuthClient(address: string, appId: string) {
-  const grpc = new GrpcClient(address, credentials.createInsecure());
+  const grpc = new GrpcClient(address, credentials.createSsl());
   return new Client(grpc, appId);
 }

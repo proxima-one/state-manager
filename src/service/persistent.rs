@@ -201,8 +201,9 @@ impl<Storage: KVStorage> AppStateManager for PersistentAppStateManager<Storage> 
   }
 
   fn set(&mut self, parts: Vec<KeyValue>) -> Result<()> {
+    self.storage_mut().write(parts)?;
     self.modifications_number += 1;
-    self.storage_mut().write(parts)
+    Ok(())
   }
 
   fn get_checkpoints(&self) -> Result<Vec<Checkpoint>> {
@@ -210,7 +211,6 @@ impl<Storage: KVStorage> AppStateManager for PersistentAppStateManager<Storage> 
   }
 
   fn create_checkpoint(&mut self, payload: &str) -> Result<String> {
-    self.modifications_number += 1;
     let new_id = self.generate_checkpoint_id();
 
     self
@@ -223,27 +223,29 @@ impl<Storage: KVStorage> AppStateManager for PersistentAppStateManager<Storage> 
     });
     self.save_manifest()?;
 
+    self.modifications_number += 1;
     Ok(new_id)
   }
 
   fn revert(&mut self, id: &str) -> Result<()> {
     let index = self.find_checkpoint(id)?;
-    self.modifications_number += 1;
     self.reset_head(id)?;
     self.remove_checkpoints((index + 1)..)?;
+    self.modifications_number += 1;
     Ok(())
   }
 
   fn cleanup(&mut self, until_checkpoint: &str) -> Result<()> {
     let index = self.find_checkpoint(until_checkpoint)?;
-    self.modifications_number += 1;
     self.remove_checkpoints(..index)?;
+    self.modifications_number += 1;
     Ok(())
   }
 
   fn reset(&mut self) -> Result<()> {
+    self.clean_head()?;
     self.modifications_number += 1;
-    self.clean_head()
+    Ok(())
   }
 
   fn modifications_number(&self) -> u32 {

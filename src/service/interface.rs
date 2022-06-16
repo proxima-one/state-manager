@@ -11,6 +11,8 @@ pub trait StateManager: Sync + Send {
     id: &str,
     f: impl FnOnce(&mut Self::AppStateManager) -> Out,
   ) -> Result<Out>;
+
+  fn drop_app(&self, id: &str) -> Result<()>;
 }
 
 pub trait AppStateManager: Sync + Send {
@@ -20,6 +22,7 @@ pub trait AppStateManager: Sync + Send {
   fn create_checkpoint(&mut self, payload: &str) -> Result<String>;
   fn revert(&mut self, id: &str) -> Result<()>;
   fn cleanup(&mut self, until_checkpoint: &str) -> Result<()>;
+  fn reset(&mut self) -> Result<()>;
 
   fn modifications_number(&self) -> u32;
 }

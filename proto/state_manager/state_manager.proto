@@ -9,6 +9,8 @@ service StateManagerService {
   rpc CreateCheckpoint(CreateCheckpointRequest) returns (CreateCheckpointResponse);
   rpc Revert(RevertRequest) returns (RevertResponse);
   rpc Cleanup(CleanupRequest) returns (CleanupResponse);
+  rpc Reset(ResetRequest) returns (ResetResponse);
+  rpc RemoveApp(RemoveAppRequest) returns (RemoveAppResponse);
 }
 
 
@@ -78,6 +80,23 @@ message CleanupRequest {
 
 message CleanupResponse {
   string etag = 1;
+}
+
+message ResetRequest {
+  string app_id = 1;
+  string etag = 2;
+}
+
+message ResetResponse {
+  string etag = 1;
+}
+
+message RemoveAppRequest {
+  string app_id = 1;
+  string admin_token = 2;
+}
+
+message RemoveAppResponse {
 }
 
 

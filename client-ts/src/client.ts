@@ -105,6 +105,14 @@ export class Client {
     });
     this.etag = response.etag;
   }
+
+  async reset(): Promise<void> {
+    assert(this.etag);
+    const response = await this.rpc.Reset({
+      appId: this.appId, etag: this.etag
+    });
+    this.etag = response.etag;
+  }
 }
 
 export function createNoAuthClient(address: string, appId: string) {

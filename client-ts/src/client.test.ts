@@ -26,6 +26,10 @@ test("Service", async () => {
   expect(await client.get(["a"])).toEqual({ "a": to_bytes("2") });
   const checkpoint1 = await client.create_checkpoint("1");
   await client.cleanup(checkpoint1);
+  await client.set({ "a": to_bytes("2") });
+  await client.reset();
+  expect(await client.get(["a", "b"])).toEqual({});
+
   // expect(await client.revert(checkpoint0)).toThrow();
   client.revert(checkpoint0);
 });

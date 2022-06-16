@@ -21,7 +21,7 @@ pub struct PersistentStateManager<Storage: KVStorage> {
 pub struct PersistentAppStateManager<Storage: KVStorage> {
   root: PathBuf,
   manifest: AppManifest,
-  storage: Storage,
+  storage: Option<Storage>,
   modifications_number: u32,
 }
 
@@ -62,7 +62,7 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     Ok(Self {
       root,
       manifest,
-      storage,
+      storage: Some(storage),
       modifications_number: 0,
     })
   }
@@ -76,9 +76,17 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     Ok(Self {
       root,
       manifest,
-      storage,
+      storage: Some(storage),
       modifications_number: 0,
     })
+  }
+
+  fn storage(&self) -> &Storage {
+    self.storage.as_ref().unwrap()
+  }
+
+  fn storage_mut(&mut self) -> &mut Storage {
+    self.storage.as_mut().unwrap()
   }
 
   fn load_manifest(path: impl AsRef<Path>) -> Result<AppManifest> {
@@ -140,11 +148,19 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     let head_path = Self::head_path(&self.root);
     let checkpoint_path = Self::checkpoint_path(&self.root, checkpoint_id);
 
-    let checkpoint_db = Storage::new(checkpoint_path)?;
-    self.storage = checkpoint_db; // closes connection to current db
+    self.storage = None; // closes connection to current db
     Storage::destroy(&head_path)?;
-    self.storage.save_copy(&head_path)?;
-    self.storage = Storage::new(head_path)?;
+    let checkpoint_db = Storage::new(checkpoint_path)?;
+    checkpoint_db.save_copy(&head_path)?;
+    self.storage = Some(Storage::new(head_path)?);
+    Ok(())
+  }
+
+  fn clean_head(&mut self) -> Result<()> {
+    let head_path = Self::head_path(&self.root);
+    self.storage = None;
+    Storage::destroy(&head_path)?;
+    self.storage = Some(Storage::new(head_path)?);
     Ok(())
   }
 }
@@ -171,16 +187,22 @@ impl<Storage: KVStorage> StateManager for PersistentStateManager<Storage> {
       .or_try_insert_with(|| PersistentAppStateManager::load(self.app_path(id)))?;
     Ok(f(&mut app))
   }
+
+  fn drop_app(&self, id: &str) -> Result<()> {
+    std::fs::remove_dir_all(self.app_path(id))?;
+    self.apps.remove(id);
+    Ok(())
+  }
 }
 
 impl<Storage: KVStorage> AppStateManager for PersistentAppStateManager<Storage> {
   fn get<Key: AsRef<str>>(&self, keys: &[Key]) -> Result<Vec<KeyValue>> {
-    self.storage.get(keys)
+    self.storage().get(keys)
   }
 
   fn set(&mut self, parts: Vec<KeyValue>) -> Result<()> {
     self.modifications_number += 1;
-    self.storage.write(parts)
+    self.storage_mut().write(parts)
   }
 
   fn get_checkpoints(&self) -> Result<Vec<Checkpoint>> {
@@ -192,7 +214,7 @@ impl<Storage: KVStorage> AppStateManager for PersistentAppStateManager<Storage> 
     let new_id = self.generate_checkpoint_id();
 
     self
-      .storage
+      .storage()
       .save_copy(Self::checkpoint_path(&self.root, &new_id))?;
 
     self.manifest.checkpoints.push(Checkpoint {
@@ -217,6 +239,11 @@ impl<Storage: KVStorage> AppStateManager for PersistentAppStateManager<Storage> 
     self.modifications_number += 1;
     self.remove_checkpoints(..index)?;
     Ok(())
+  }
+
+  fn reset(&mut self) -> Result<()> {
+    self.modifications_number += 1;
+    self.clean_head()
   }
 
   fn modifications_number(&self) -> u32 {

@@ -53,6 +53,13 @@ impl StateManager for InMemoryStateManager {
       Err(Error::NotFound(format!("Unknown app: {}", id)))
     }
   }
+
+  fn drop_app(&self, id: &str) -> Result<()> {
+    match self.apps.remove(id) {
+      Some(_) => Ok(()),
+      None => Err(Error::NotFound(format!("App {} not found", id))),
+    }
+  }
 }
 
 impl AppStateManager for InMemoryAppStateManager {
@@ -163,6 +170,11 @@ impl AppStateManager for InMemoryAppStateManager {
         until_checkpoint
       )));
     }
+    Ok(())
+  }
+
+  fn reset(&mut self) -> Result<()> {
+    self.current.clear();
     Ok(())
   }
 

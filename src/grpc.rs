@@ -1,10 +1,12 @@
 use crate::proto::{self, state_manager_service_server::StateManagerService};
 use crate::service::interface::{self, AppStateManager, StateManager};
 use crate::types::{Error, KeyValue};
-use log::{info, error};
+use log::{error, info};
 use rand::{distributions::Alphanumeric, Rng};
 use std::fmt::Display;
 use tonic::{Request, Response, Status};
+
+const ADMIN_TOKEN: &str = "iknowwhatimdoing";
 
 #[derive(Debug)]
 pub struct GrpcService<StateManager> {
@@ -48,6 +50,14 @@ impl<TStateManager: StateManager> GrpcService<TStateManager> {
       let result = f(app)?;
       Ok(Response::new(Resp::with_etag(result, self.get_etag(app))))
     })?
+  }
+
+  fn remove_app(&self, id: &str, admin_token: &str) -> Result<Response<proto::RemoveAppResponse>, Status> {
+    if admin_token != ADMIN_TOKEN {
+      return Err(tonic::Status::permission_denied("Unauthorized"));
+    }
+    self.manager.drop_app(id)?;
+    Ok(Response::new(proto::RemoveAppResponse {}))
   }
 }
 
@@ -159,6 +169,29 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
     log(&request, &result);
     result
   }
+
+  async fn reset(
+    &self,
+    request: Request<proto::ResetRequest>,
+  ) -> Result<Response<proto::ResetResponse>, Status> {
+    let request = request.into_inner();
+    let result = self.with_app(&request.app_id, |app| {
+      self.check_etag(&request.etag, app)?;
+      app.reset().map_err(From::from)
+    });
+    log(&request, &result);
+    result
+  }
+
+  async fn remove_app(
+    &self,
+    request: Request<proto::RemoveAppRequest>,
+  ) -> Result<Response<proto::RemoveAppResponse>, Status> {
+    let request = request.into_inner();
+    let result = self.remove_app(&request.app_id, &request.admin_token);
+    log(&request, &result);
+    result
+  }
 }
 
 fn log<T>(request: &impl Display, result: &Result<Response<T>, Status>) {
@@ -236,6 +269,11 @@ impl WithEtag<()> for proto::CleanupResponse {
     Self { etag: etag.into() }
   }
 }
+impl WithEtag<()> for proto::ResetResponse {
+  fn with_etag(_from: (), etag: impl Into<String>) -> Self {
+    Self { etag: etag.into() }
+  }
+}
 
 impl From<Error> for Status {
   fn from(err: Error) -> Self {
@@ -295,5 +333,17 @@ impl Display for proto::RevertRequest {
 impl Display for proto::CleanupRequest {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "[{}]: Cleanup({:?})", self.app_id, self.until_checkpoint)
+  }
+}
+
+impl Display for proto::ResetRequest {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "[{}]: Reset()", self.app_id)
+  }
+}
+
+impl Display for proto::RemoveAppRequest {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "[{}]: RemoveApp()", self.app_id)
   }
 }

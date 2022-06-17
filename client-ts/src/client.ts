@@ -116,6 +116,10 @@ export class Client {
 }
 
 export function createNoAuthClient(address: string, appId: string) {
-  const grpc = new GrpcClient(address, credentials.createSsl());
+  const MB = 2 ** 20;
+  const grpc = new GrpcClient(address, credentials.createSsl(), {
+    "grpc.max_receive_message_length": 128 * MB,
+    "grpc.max_send_message_length": 32 * MB,
+  });
   return new Client(grpc, appId);
 }

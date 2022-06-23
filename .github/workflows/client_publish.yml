@@ -1,0 +1,47 @@
+name: client-publish
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "proto/**"
+      - "client-ts/**"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client-ts
+    env:
+      BIN_DIR: ./bin
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v3
+
+      - name: "Setup npm"
+        run: |
+          npm set @proxima-one:registry=https://npm.pkg.github.com
+          npm set "//npm.pkg.github.com/:_authToken=${{ secrets.CI_NPM_TOKEN }}"
+          npm set "//registry.npmjs.org/:_authToken=${{ secrets.CI_PUBLIC_NPM_TOKEN }}"
+
+      - name: "Setup Buf"
+        run: |
+          mkdir -p $BIN_DIR
+          curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.6.0/buf-$(uname -s)-$(uname -m)" -o $BIN_DIR/buf
+          chmod +x $BIN_DIR/buf
+
+      - name: "Install Dependencies"
+        run: yarn install
+
+      - name: "Publish"
+        run: |
+          export PATH=$PATH:$(realpath $BIN_DIR)
+          yarn publish --non-interactive --no-git-tag-version
+
+      - name: "Set git tag"
+        run: |
+          NEW_VERSION=$(jq < package.json ".version" --raw-output)
+          TAG="client-v$NEW_VERSION"
+          git tag $TAG
+          git push --tags

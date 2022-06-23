@@ -3,11 +3,15 @@ on:
   push:
     branches:
       - master
+    paths-ignore:
+      - "client-ts/**"
 
   pull_request:
     types: [opened, synchronize]
     branches:
       - master
+    paths-ignore:
+      - "client-ts/**"
 
 jobs:
   version:

@@ -46,10 +46,13 @@ impl<TStateManager: StateManager> GrpcService<TStateManager> {
     id: &str,
     f: impl FnOnce(&mut TStateManager::AppStateManager) -> Result<Out, Status>,
   ) -> Result<Response<Resp>, Status> {
-    self.manager.with_app(id, |app| {
+    let start = std::time::Instant::now();
+    let result = self.manager.with_app(id, |app| {
       let result = f(app)?;
       Ok(Response::new(Resp::with_etag(result, self.get_etag(app))))
-    })?
+    })?;
+    info!("App request handled in {:?}", start.elapsed());
+    result
   }
 
   fn remove_app(&self, id: &str, admin_token: &str) -> Result<Response<proto::RemoveAppResponse>, Status> {

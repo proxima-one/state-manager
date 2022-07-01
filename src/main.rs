@@ -13,6 +13,7 @@ mod types;
 mod proto {
   tonic::include_proto!("state_manager");
 }
+mod utils;
 
 #[derive(Parser, Debug)]
 #[clap(version)]

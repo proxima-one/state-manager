@@ -4,6 +4,7 @@ use crate::types::{Error, KeyValue, Result};
 use dashmap::DashMap;
 use log::info;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
@@ -59,12 +60,14 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     std::fs::create_dir_all(Self::checkpoints_dir(&root))?;
     let manifest = Self::load_manifest(Self::manifest_path(&root))?;
     let storage = Storage::new(Self::head_path(&root))?;
-    Ok(Self {
+    let mut result = Self {
       root,
       manifest,
       storage: Some(storage),
       modifications_number: 0,
-    })
+    };
+    result.restore_consistency()?;
+    Ok(result)
   }
 
   fn load(root: PathBuf) -> Result<Self> {
@@ -73,12 +76,14 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     }
     let manifest = Self::load_manifest(Self::manifest_path(&root))?;
     let storage = Storage::new(Self::head_path(&root))?;
-    Ok(Self {
+    let mut result = Self {
       root,
       manifest,
       storage: Some(storage),
       modifications_number: 0,
-    })
+    };
+    result.restore_consistency()?;
+    Ok(result)
   }
 
   fn storage(&self) -> &Storage {
@@ -104,17 +109,55 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     Ok(())
   }
 
-  fn generate_checkpoint_id(&self) -> String {
-    // Could just be guids as well
-    match self.manifest.checkpoints.last() {
-      Some(last) => (last
-        .id
-        .parse::<usize>()
-        .expect("Non numerical checkpoint name in manifest")
-        + 1)
-        .to_string(),
-      None => "0".to_string(),
+  fn restore_consistency(&mut self) -> Result<()> {
+    let mut existing = HashSet::new();
+    for entry in std::fs::read_dir(Self::checkpoints_dir(&self.root))? {
+      let entry = entry?;
+      existing.insert(
+        entry
+          .path()
+          .file_name()
+          .unwrap()
+          .to_str()
+          .unwrap()
+          .to_owned(),
+      );
     }
+    let recorded: HashSet<_> = self
+      .manifest
+      .checkpoints
+      .iter()
+      .map(|cp| cp.id.clone())
+      .collect();
+
+    for id in existing.difference(&recorded) {
+      self.remove_checkpoint(id)?;
+    }
+
+    let prev_len = self.manifest.checkpoints.len();
+    self
+      .manifest
+      .checkpoints
+      .retain(|cp| existing.contains(&cp.id));
+    if prev_len != self.manifest.checkpoints.len() {
+      self.save_manifest()?;
+    }
+
+    Ok(())
+  }
+
+  fn get_checkpoint_ids(&self) -> Vec<i32> {
+    self
+      .manifest
+      .checkpoints
+      .iter()
+      .map(|checkpoint| {
+        checkpoint
+          .id
+          .parse()
+          .expect("Non numerical checkpoint name in manifest")
+      })
+      .collect()
   }
 
   fn find_checkpoint(&self, id: &str) -> Result<usize> {
@@ -134,13 +177,17 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     }
   }
 
+  fn remove_checkpoint(&mut self, id: &str) -> Result<()> {
+    std::fs::remove_dir_all(Self::checkpoint_path(&self.root, id)).map_err(From::from)
+  }
+
   fn remove_checkpoints(&mut self, slice: impl std::ops::RangeBounds<usize>) -> Result<()> {
     let to_remove: Vec<_> = self.manifest.checkpoints.drain(slice).collect();
     info!("Cleaning up {} checkpoints", to_remove.len());
     self.save_manifest()?;
-    to_remove.into_iter().try_for_each(|checkpoint| {
-      std::fs::remove_dir_all(Self::checkpoint_path(&self.root, checkpoint.id))
-    })?;
+    to_remove
+      .into_iter()
+      .try_for_each(|checkpoint| self.remove_checkpoint(&checkpoint.id))?;
     Ok(())
   }
 
@@ -211,7 +258,14 @@ impl<Storage: KVStorage> AppStateManager for PersistentAppStateManager<Storage> 
   }
 
   fn create_checkpoint(&mut self, payload: &str) -> Result<String> {
-    let new_id = self.generate_checkpoint_id();
+    let ids = self.get_checkpoint_ids();
+    let (kept, removed) = if !ids.is_empty() {
+      crate::utils::exponential_sequence::extend(&ids)
+    } else {
+      (vec![0], vec![])
+    };
+    let new_id = kept.last().unwrap().to_string();
+    let kept: HashSet<_> = kept.iter().map(|x| x.to_string()).collect();
 
     self
       .storage()
@@ -221,7 +275,15 @@ impl<Storage: KVStorage> AppStateManager for PersistentAppStateManager<Storage> 
       id: new_id.clone(),
       payload: payload.to_owned(),
     });
+    self
+      .manifest
+      .checkpoints
+      .retain(|checkpoint| kept.contains(&checkpoint.id));
     self.save_manifest()?;
+
+    for id in removed {
+      self.remove_checkpoint(&id.to_string())?;
+    }
 
     self.modifications_number += 1;
     Ok(new_id)

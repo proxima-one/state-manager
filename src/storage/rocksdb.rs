@@ -18,9 +18,15 @@ impl From<RocksdbError> for Error {
 
 impl KVStorage for RocksdbStorage {
   fn new(path: impl AsRef<Path>) -> Result<Self> {
+    let mut block_opts = BlockBasedOptions::default();
+    block_opts.set_block_cache(&Cache::new_lru_cache(2usize.pow(36)).unwrap());
+
     let mut options = Options::default();
     options.set_paranoid_checks(true);
     options.create_if_missing(true);
+    options.set_block_based_table_factory(&block_opts);
+    options.set_write_buffer_size(2usize.pow(30));
+    options.set_max_write_buffer_number(8);
     options.enable_statistics();
 
     let db = DB::open(&options, &path)?;

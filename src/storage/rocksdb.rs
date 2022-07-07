@@ -5,9 +5,11 @@ use rocksdb::{
 };
 use std::io::Write;
 use std::path::Path;
+use std::sync::mpsc::{sync_channel, SyncSender, TryRecvError};
 
 pub struct RocksdbStorage {
   db: DB,
+  _sender: SyncSender<()>,
 }
 
 impl From<RocksdbError> for Error {
@@ -32,21 +34,28 @@ impl KVStorage for RocksdbStorage {
     let db = DB::open(&options, &path)?;
 
     let statistics_path = path.as_ref().join("statistics");
-    std::thread::spawn(move || loop {
-      writeln!(
-        std::fs::File::create(&statistics_path).unwrap(),
-        "{}",
-        options.get_statistics().unwrap()
-      )
-      .unwrap();
-      std::thread::sleep(std::time::Duration::from_secs(30));
+    let (sender, receiver) = sync_channel::<()>(0);
+    std::thread::spawn(move || {
+      while receiver.try_recv() != Err(TryRecvError::Disconnected) {
+        writeln!(
+          std::fs::File::create(&statistics_path).unwrap(),
+          "{}",
+          options.get_statistics().unwrap()
+        )
+        .unwrap();
+        std::thread::sleep(std::time::Duration::from_secs(30));
+      }
     });
 
-    Ok(Self { db })
+    Ok(Self {
+      db,
+      _sender: sender,
+    })
   }
 
   fn destroy(path: impl AsRef<Path>) -> Result<()> {
-    DB::destroy(&Options::default(), path)?;
+    DB::destroy(&Options::default(), &path)?;
+    std::fs::remove_dir_all(path)?;
     Ok(())
   }
 

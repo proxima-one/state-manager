@@ -1,6 +1,9 @@
 use super::interface::KVStorage;
 use crate::types::{Bytes, Error, KeyValue, Result};
-use rocksdb::{checkpoint::Checkpoint, Error as RocksdbError, Options, WriteBatch, DB};
+use rocksdb::{
+  checkpoint::Checkpoint, BlockBasedOptions, Cache, Error as RocksdbError, Options, WriteBatch, DB,
+};
+use std::io::Write;
 use std::path::Path;
 
 pub struct RocksdbStorage {
@@ -18,7 +21,21 @@ impl KVStorage for RocksdbStorage {
     let mut options = Options::default();
     options.set_paranoid_checks(true);
     options.create_if_missing(true);
-    let db = DB::open(&options, path)?;
+    options.enable_statistics();
+
+    let db = DB::open(&options, &path)?;
+
+    let statistics_path = path.as_ref().join("statistics");
+    std::thread::spawn(move || loop {
+      writeln!(
+        std::fs::File::create(&statistics_path).unwrap(),
+        "{}",
+        options.get_statistics().unwrap()
+      )
+      .unwrap();
+      std::thread::sleep(std::time::Duration::from_secs(30));
+    });
+
     Ok(Self { db })
   }
 

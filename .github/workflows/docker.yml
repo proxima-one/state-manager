@@ -46,7 +46,6 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
-          file: ./deployment/Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
           push: true
           build-args: BUILD_VERSION=${{ needs.version.outputs.version }}

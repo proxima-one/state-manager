@@ -14,7 +14,7 @@ COPY ./src ./src/
 RUN cargo build --release
 
 
-FROM alpine:3.16.2 as prod
+FROM rust:slim as prod
 
 USER root
 

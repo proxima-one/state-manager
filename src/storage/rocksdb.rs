@@ -19,7 +19,7 @@ impl From<RocksdbError> for Error {
 }
 
 impl KVStorage for RocksdbStorage {
-  fn new(path: impl AsRef<Path>) -> Result<Self> {
+  fn open(path: impl AsRef<Path>) -> Result<Self> {
     let mut block_opts = BlockBasedOptions::default();
     block_opts.set_block_cache(&Cache::new_lru_cache(2usize.pow(36)).unwrap());
 

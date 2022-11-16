@@ -12,7 +12,6 @@ fn part(key: impl AsRef<str>, value: impl AsRef<[u8]>) -> KeyValue {
 fn test_service(manager: &impl StateManager) {
   const APP_ID: &str = "test";
   manager.init_app(APP_ID).unwrap();
-  assert!(manager.init_app(APP_ID).is_err());
   manager
     .with_app(APP_ID, |app| {
       assert_eq!(app.modifications_number(), 0);

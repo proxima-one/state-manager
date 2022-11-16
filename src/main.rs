@@ -3,7 +3,7 @@ use grpc::GrpcService;
 use log::info;
 use proto::state_manager_service_server::StateManagerServiceServer;
 use service::persistent::PersistentStateManager;
-use storage::rocksdb::RocksdbStorage;
+use storage::filesystem::FilesystemStorage;
 use tonic::transport::Server;
 
 mod grpc;
@@ -49,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   setup_logger(&args)?;
 
   let addr = format!("0.0.0.0:{}", args.port).parse()?;
-  let service = GrpcService::new(PersistentStateManager::<RocksdbStorage>::new(args.db_path));
+  let service = GrpcService::new(PersistentStateManager::<FilesystemStorage>::new(args.db_path));
 
   let on_finish = Server::builder()
     .add_service(StateManagerServiceServer::new(service))

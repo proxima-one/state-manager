@@ -59,7 +59,7 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
   fn new(root: PathBuf) -> Result<Self> {
     std::fs::create_dir_all(Self::checkpoints_dir(&root))?;
     let manifest = Self::load_manifest(Self::manifest_path(&root))?;
-    let storage = Storage::new(Self::head_path(&root))?;
+    let storage = Storage::open(Self::head_path(&root))?;
     let mut result = Self {
       root,
       manifest,
@@ -75,7 +75,7 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
       return Err(Error::NotFound("Application does not exist".to_owned()));
     }
     let manifest = Self::load_manifest(Self::manifest_path(&root))?;
-    let storage = Storage::new(Self::head_path(&root))?;
+    let storage = Storage::open(Self::head_path(&root))?;
     let mut result = Self {
       root,
       manifest,
@@ -197,9 +197,9 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
 
     self.storage = None; // closes connection to current db
     Storage::destroy(&head_path)?;
-    let checkpoint_db = Storage::new(checkpoint_path)?;
+    let checkpoint_db = Storage::open(checkpoint_path)?;
     checkpoint_db.save_copy(&head_path)?;
-    self.storage = Some(Storage::new(head_path)?);
+    self.storage = Some(Storage::open(head_path)?);
     Ok(())
   }
 
@@ -207,7 +207,7 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     let head_path = Self::head_path(&self.root);
     self.storage = None;
     Storage::destroy(&head_path)?;
-    self.storage = Some(Storage::new(head_path)?);
+    self.storage = Some(Storage::open(head_path)?);
     Ok(())
   }
 }

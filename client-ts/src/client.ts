@@ -34,17 +34,18 @@ export class Client {
     };
 
     const sendRequestWithReties = async (service: string, method: string, data: Uint8Array): Promise<Uint8Array> => {
-      const RETRIES = 5;
-      const DELAY = 200;
+      const RETRIES = 7;
+      let delay = 500;
 
       const path = `/${service}/${method}`
       for (let i = 0; i < RETRIES; ++i) {
         try {
           return await sendRequest(path, data);
         } catch (e) {
-          console.error(`Error during gRPC call, retrying. ${e}`);
+          console.error(`Error during gRPC call, retrying in ${delay}ms. ${e}`);
         }
-        await sleep(DELAY);
+        await sleep(delay);
+        delay *= 2;
       }
       return sendRequest(path, data);
     }

@@ -2,14 +2,24 @@ use super::interface::{AppStateManager, Checkpoint, StateManager};
 use crate::storage::interface::KVStorage;
 use crate::types::{Error, KeyValue, Result};
 use dashmap::DashMap;
-use log::info;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct AppManifest {
   checkpoints: Vec<Checkpoint>,
+  version: Option<String>,
+}
+
+impl Default for AppManifest {
+  fn default() -> Self {
+    Self {
+      checkpoints: Vec::new(),
+      version: Some("1".to_owned()),
+    }
+  }
 }
 
 #[derive(Default, Debug)]
@@ -56,18 +66,13 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     root.as_ref().join("manifest.json")
   }
 
+  fn incompatible(manifest: &AppManifest) -> bool {
+    manifest.version.is_none()
+  }
+
   fn new(root: PathBuf) -> Result<Self> {
     std::fs::create_dir_all(Self::checkpoints_dir(&root))?;
-    let manifest = Self::load_manifest(Self::manifest_path(&root))?;
-    let storage = Storage::open(Self::head_path(&root))?;
-    let mut result = Self {
-      root,
-      manifest,
-      storage: Some(storage),
-      modifications_number: 0,
-    };
-    result.restore_consistency()?;
-    Ok(result)
+    Self::load(root)
   }
 
   fn load(root: PathBuf) -> Result<Self> {
@@ -75,6 +80,17 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
       return Err(Error::NotFound("Application does not exist".to_owned()));
     }
     let manifest = Self::load_manifest(Self::manifest_path(&root))?;
+
+    if Self::incompatible(&manifest) {
+      let backup_dir = root
+        .parent()
+        .unwrap()
+        .join(format!("{}~", root.file_name().unwrap().to_str().unwrap()));
+      warn!("Moving incompatible data to {}", backup_dir.display());
+      std::fs::rename(&root, backup_dir)?;
+      return Self::new(root);
+    }
+
     let storage = Storage::open(Self::head_path(&root))?;
     let mut result = Self {
       root,
@@ -191,6 +207,7 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     Ok(())
   }
 
+  // TODO: optimize for a generic case
   fn reset_head(&mut self, checkpoint_id: impl AsRef<Path>) -> Result<()> {
     let head_path = Self::head_path(&self.root);
     let checkpoint_path = Self::checkpoint_path(&self.root, checkpoint_id);

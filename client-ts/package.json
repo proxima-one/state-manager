@@ -26,6 +26,7 @@
     "compile": "tsc --build",
     "build": "yarn clean && yarn codegen && yarn compile",
     "prepack": "yarn build",
-    "test": "yarn build && jest"
+    "test": "yarn build && jest",
+    "dev": "ts-node src/dev.ts"
   }
 }

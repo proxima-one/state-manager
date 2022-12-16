@@ -284,6 +284,7 @@ impl From<Error> for Status {
       Error::NotFound(message) => Self::not_found(message),
       Error::DbError(message) => Self::internal(message),
       Error::IoError(err) => err.into(),
+      Error::S3Error(err) => Self::unknown(format!("{}", err))
     }
   }
 }

@@ -1,4 +1,5 @@
 use super::interface::{AppStateManager, Checkpoint, StateManager};
+use crate::file_storage::interface::FileStorage;
 use crate::types::{Bytes, Error, KeyValue, Result};
 use dashmap::DashMap;
 use log::info;
@@ -31,6 +32,7 @@ impl InMemoryAppStateManager {
   }
 }
 
+#[async_trait::async_trait]
 impl StateManager for InMemoryStateManager {
   type AppStateManager = InMemoryAppStateManager;
 
@@ -60,8 +62,18 @@ impl StateManager for InMemoryStateManager {
       None => Err(Error::NotFound(format!("App {} not found", id))),
     }
   }
+
+  async fn store_snapshot(
+    &self,
+    _app_id: &str,
+    _storage: &impl FileStorage,
+    _prefix: &std::path::Path,
+  ) -> Result<()> {
+    unimplemented!();
+  }
 }
 
+#[async_trait::async_trait]
 impl AppStateManager for InMemoryAppStateManager {
   fn get<Key: AsRef<str>>(&self, keys: &[Key]) -> Result<Vec<KeyValue>> {
     let mut result = Vec::new();
@@ -180,5 +192,13 @@ impl AppStateManager for InMemoryAppStateManager {
 
   fn modifications_number(&self) -> u32 {
     self.modifications_number
+  }
+
+  async fn store_snapshot(
+    &self,
+    _storage: &impl FileStorage,
+    _prefix: &std::path::Path,
+  ) -> Result<()> {
+    unimplemented!();
   }
 }

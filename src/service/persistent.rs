@@ -1,7 +1,9 @@
 use super::interface::{AppStateManager, Checkpoint, StateManager};
+use crate::file_storage::interface::FileStorage;
 use crate::storage::interface::KVStorage;
 use crate::storage::rocksdb::RocksdbStorage;
 use crate::types::{Error, KeyValue, Result};
+use async_trait::async_trait;
 use dashmap::DashMap;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
@@ -254,6 +256,7 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
   }
 }
 
+#[async_trait]
 impl<Storage: KVStorage> StateManager for PersistentStateManager<Storage> {
   type AppStateManager = PersistentAppStateManager<Storage>;
 
@@ -277,6 +280,19 @@ impl<Storage: KVStorage> StateManager for PersistentStateManager<Storage> {
     Ok(f(&mut app))
   }
 
+  async fn store_snapshot(
+    &self,
+    app_id: &str,
+    storage: &impl FileStorage,
+    prefix: &std::path::Path,
+  ) -> Result<()> {
+    let app = self
+      .apps
+      .entry(app_id.to_owned())
+      .or_try_insert_with(|| PersistentAppStateManager::load(self.app_path(app_id)))?;
+    app.store_snapshot(storage, prefix).await
+  }
+
   fn drop_app(&self, id: &str) -> Result<()> {
     std::fs::remove_dir_all(self.app_path(id))?;
     self.apps.remove(id);
@@ -284,6 +300,7 @@ impl<Storage: KVStorage> StateManager for PersistentStateManager<Storage> {
   }
 }
 
+#[async_trait]
 impl<Storage: KVStorage> AppStateManager for PersistentAppStateManager<Storage> {
   fn get<Key: AsRef<str>>(&self, keys: &[Key]) -> Result<Vec<KeyValue>> {
     self.storage().get(keys)
@@ -349,6 +366,35 @@ impl<Storage: KVStorage> AppStateManager for PersistentAppStateManager<Storage> 
   fn reset(&mut self) -> Result<()> {
     self.clean_head()?;
     self.modifications_number += 1;
+    Ok(())
+  }
+
+  async fn store_snapshot(
+    &self,
+    storage: &impl FileStorage,
+    prefix: &std::path::Path,
+  ) -> Result<()> {
+    let checkpoint = self.manifest.checkpoints.last().ok_or(Error::NotFound(
+      "Can't create a snapshot because there are no checkpoints yet".to_owned(),
+    ))?;
+    let checkpoint_id = &checkpoint.id;
+    let checkpoint_path = Self::checkpoint_path(&self.root, checkpoint_id);
+    storage
+      .upload_folder(
+        &checkpoint_path,
+        &Self::checkpoint_path(prefix, checkpoint_id),
+      )
+      .await?;
+
+    let mut manifest = AppManifest::default();
+    manifest.checkpoints.push(checkpoint.clone());
+    let manifest_contents: Vec<u8> = serde_json::to_string(&manifest)
+      .map_err(std::io::Error::from)?
+      .bytes()
+      .collect();
+    storage
+      .upload_buffer(&manifest_contents, &Self::manifest_path(prefix))
+      .await?;
     Ok(())
   }
 

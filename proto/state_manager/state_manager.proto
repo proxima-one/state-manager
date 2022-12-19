@@ -11,6 +11,7 @@ service StateManagerService {
   rpc Cleanup(CleanupRequest) returns (CleanupResponse);
   rpc Reset(ResetRequest) returns (ResetResponse);
   rpc RemoveApp(RemoveAppRequest) returns (RemoveAppResponse);
+  rpc UploadSnapshot(UploadSnapshotRequest) returns (UploadSnapshotResponse);
 }
 
 
@@ -97,6 +98,14 @@ message RemoveAppRequest {
 }
 
 message RemoveAppResponse {
+}
+
+message UploadSnapshotRequest {
+  string app_id = 1;
+}
+
+message UploadSnapshotResponse {
+  string snapshot_id = 1;
 }
 
 

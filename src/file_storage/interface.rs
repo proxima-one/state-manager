@@ -4,7 +4,7 @@ use std::path::Path;
 use walkdir::WalkDir;
 
 #[async_trait]
-pub trait FileStorage : Sync {
+pub trait FileStorage : Sync + Send {
     async fn upload_folder(&self, path: &Path, remote_path: &Path) -> Result<()> {
         for entry in WalkDir::new(path) {
             let entry = entry

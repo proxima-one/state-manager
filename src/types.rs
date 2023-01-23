@@ -18,6 +18,9 @@ pub enum Error {
 
   #[error(transparent)]
   IoError(#[from] std::io::Error),
+
+  #[error(transparent)]
+  S3Error(#[from] s3::error::S3Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

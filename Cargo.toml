@@ -1,6 +1,6 @@
 [package]
 name = "state-manager"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2021"
 
 [dependencies]
@@ -10,12 +10,16 @@ fern = "0.6"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.8.5"
+chrono = "0.4.23"
 tonic = "0.7.2"
 prost = "0.10"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 dashmap = "5.3.3"
 rocksdb = "0.18"
 clap = { version = "3.1.18", features = ["derive", "env"] }
+async-trait = "0.1.59"
+walkdir = "2.3.2"
+rust-s3 = "0.32.3"
 
 [build-dependencies]
 tonic-build = "0.7.2"

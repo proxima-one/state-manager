@@ -1,3 +1,4 @@
+use crate::file_storage::{interface::FileStorage};
 use crate::proto::{self, state_manager_service_server::StateManagerService};
 use crate::service::interface::{self, AppStateManager, StateManager};
 use crate::types::{Error, KeyValue};
@@ -9,20 +10,32 @@ use tonic::{Request, Response, Status};
 const ADMIN_TOKEN: &str = "iknowwhatimdoing";
 
 #[derive(Debug)]
-pub struct GrpcService<StateManager> {
+pub struct GrpcService<StateManager, FileStorage> {
   manager: StateManager,
   // Some string which is different across process restarts
   run_id: String,
+  snapshot_storage: Option<FileStorage>,
 }
 
-impl<TStateManager: StateManager> GrpcService<TStateManager> {
-  pub fn new(manager: TStateManager) -> GrpcService<TStateManager> {
+impl<TStateManager: StateManager, TFileStorage: FileStorage>
+  GrpcService<TStateManager, TFileStorage>
+{
+  pub fn new(manager: TStateManager) -> Self {
     let run_id = rand::thread_rng()
       .sample_iter(&Alphanumeric)
       .take(6)
       .map(char::from)
       .collect();
-    GrpcService { manager, run_id }
+    GrpcService {
+      manager,
+      run_id,
+      snapshot_storage: None,
+    }
+  }
+
+  pub fn with_snapshot_storage(mut self, storage: TFileStorage) -> Self {
+    self.snapshot_storage = Some(storage);
+    self
   }
 
   pub fn get_etag(&self, app: &TStateManager::AppStateManager) -> String {
@@ -55,7 +68,11 @@ impl<TStateManager: StateManager> GrpcService<TStateManager> {
     result
   }
 
-  fn remove_app(&self, id: &str, admin_token: &str) -> Result<Response<proto::RemoveAppResponse>, Status> {
+  fn remove_app(
+    &self,
+    id: &str,
+    admin_token: &str,
+  ) -> Result<Response<proto::RemoveAppResponse>, Status> {
     if admin_token != ADMIN_TOKEN {
       return Err(tonic::Status::permission_denied("Unauthorized"));
     }
@@ -65,7 +82,9 @@ impl<TStateManager: StateManager> GrpcService<TStateManager> {
 }
 
 #[tonic::async_trait]
-impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<TStateManager> {
+impl<TStateManager: StateManager + 'static, TFileStorage: FileStorage + 'static> StateManagerService
+  for GrpcService<TStateManager, TFileStorage>
+{
   async fn init_app(
     &self,
     request: Request<proto::InitAppRequest>,
@@ -195,6 +214,30 @@ impl<TStateManager: StateManager + 'static> StateManagerService for GrpcService<
     log(&request, &result);
     result
   }
+
+  async fn upload_snapshot(
+    &self,
+    request: Request<proto::UploadSnapshotRequest>,
+  ) -> Result<Response<proto::UploadSnapshotResponse>, Status> {
+    let request = request.into_inner();
+
+    let result = if let Some(storage) = &self.snapshot_storage {
+      let snapshot_id = chrono::Utc::now().format("%FT%H:%M:00").to_string();
+      let prefix = std::path::Path::new("/snapshots")
+        .join(&request.app_id)
+        .join(&snapshot_id);
+      self
+        .manager
+        .store_snapshot(&request.app_id, storage, &prefix)
+        .await?;
+      info!("Successfully uploaded snapshot '{}'", prefix.display());
+      Ok(Response::new(proto::UploadSnapshotResponse { snapshot_id }))
+    } else {
+      Err(Status::not_found("Snapshot storage was not initialized"))
+    };
+    log(&request, &result);
+    result
+  }
 }
 
 fn log<T>(request: &impl Display, result: &Result<Response<T>, Status>) {
@@ -284,6 +327,7 @@ impl From<Error> for Status {
       Error::NotFound(message) => Self::not_found(message),
       Error::DbError(message) => Self::internal(message),
       Error::IoError(err) => err.into(),
+      Error::S3Error(err) => Self::unknown(format!("{}", err)),
     }
   }
 }
@@ -348,5 +392,11 @@ impl Display for proto::ResetRequest {
 impl Display for proto::RemoveAppRequest {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "[{}]: RemoveApp()", self.app_id)
+  }
+}
+
+impl Display for proto::UploadSnapshotRequest {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "[{}]: UploadSnapshot()", self.app_id)
   }
 }

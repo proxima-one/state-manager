@@ -1,8 +1,6 @@
 # State Manager
-A service which allows streaming applications to store their state, partially
+A service that allows streaming applications to store their state, partially
 update it and rollback to previous versions.
-
-[Confluence page](https://proxima-one.atlassian.net/wiki/spaces/DEV/pages/220430337/State+Manager+API)
 
 ## Usage
 Basically, a state manager for the given app is a key-value storage of byte
@@ -11,9 +9,13 @@ one or in batches). There is also support for rollbacks. After storing some
 values, the user can create a checkpoint. Later, the user can rollback to any
 existing checkpoint. All the key-value pairs will then be restored to the point
 in time when the checkpoint was created. All the following checkpoints will be
-dropped.
-The user can also request old checkpoints to be removed to free some space.
+dropped.\
+Old checkpoints are automatically cleaned up with more fresh checkpoints being left than stale ones.
 
 ## Interface
 Currently, the service only supports gRPC interface. Schema can be found
-[here](https://github.com/proxima-one/state-manager/blob/master/proto/state_manager/state_manager.proto)
+[here](/proto/state_manager/state_manager.proto)
+
+## About etags
+An `etag` is some string used to avoid concurrent modifications. The client receives an etag with every response and should provide it with the next request to the server. The server then checks that no modifications have happened since the moment of response with the corresponding etag. Read-only requests don’t require an etag.
+Etags are independent across applications. Modifying requests to one application don’t affect the behavior of requests to another application.

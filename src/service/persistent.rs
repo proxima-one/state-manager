@@ -1,11 +1,10 @@
 use super::interface::{AppStateManager, Checkpoint, StateManager};
 use crate::file_storage::interface::FileStorage;
 use crate::storage::interface::KVStorage;
-use crate::storage::rocksdb::RocksdbStorage;
 use crate::types::{Error, KeyValue, Result};
 use async_trait::async_trait;
 use dashmap::DashMap;
-use log::{info, warn};
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -69,10 +68,6 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     root.as_ref().join("manifest.json")
   }
 
-  fn incompatible(manifest: &AppManifest) -> bool {
-    manifest.version.is_none()
-  }
-
   fn new(root: PathBuf) -> Result<Self> {
     std::fs::create_dir_all(Self::checkpoints_dir(&root))?;
     Self::load(root)
@@ -90,8 +85,6 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
       storage: None,
       modifications_number: 0,
     };
-
-    result.migrate()?;
 
     result.storage = Some(Storage::open(Self::head_path(&root))?);
     result.restore_consistency()?;
@@ -154,37 +147,6 @@ impl<Storage: KVStorage> PersistentAppStateManager<Storage> {
     if prev_len != self.manifest.checkpoints.len() {
       self.save_manifest()?;
     }
-
-    Ok(())
-  }
-
-  // TODO: remove
-  fn migrate(&mut self) -> Result<()> {
-    const KEY: &str = "global.state";
-
-    if !Self::incompatible(&self.manifest) {
-      return Ok(());
-    }
-
-    let backup_dir = self.root.join("checkpoints~");
-    warn!("Moving incompatible data to {}", backup_dir.display());
-    std::fs::create_dir_all(&backup_dir)?;
-    for checkpoint in &self.manifest.checkpoints {
-      let path = Self::checkpoint_path(&self.root, &checkpoint.id);
-      let backup_path = backup_dir.join(&checkpoint.id);
-      std::fs::rename(&path, &backup_path)?;
-      let values = RocksdbStorage::open(backup_path)?.get(&[KEY])?;
-      let mut storage = Storage::open(&path)?;
-      storage.write(values)?;
-      storage.save_copy(path)?;
-    }
-
-    let head_path = Self::head_path(&self.root);
-    let head_backup = self.root.join("HEAD~");
-    std::fs::rename(head_path, head_backup)?;
-
-    self.manifest.version = Some("1".to_owned());
-    self.save_manifest()?;
 
     Ok(())
   }
